@@ -3,13 +3,26 @@ import math
 import datetime
 import time
 import os
+from enum import Enum
 
 clear = lambda: os.system('clear')
 
-LEFT='4'
-RIGHT='6'
-UP='8'
-DOWN='2'
+LEFT_KEY='4'
+RIGHT_KEY='6'
+UP_KEY='8'
+DOWN_KEY='2'
+
+class Action(Enum):
+    RIGHT = 0
+    LEFT = 1
+    UP = 2
+    DOWN = 3
+    INSTRUCTIONS = 4
+    QUIT = 5
+    NEW_BOARD = 6
+    ILLEGAL = 7
+
+key_to_action = {LEFT_KEY: Action.LEFT, RIGHT_KEY: Action.RIGHT, UP_KEY: Action.UP, DOWN_KEY: Action.DOWN, 'i': Action.INSTRUCTIONS, 'q': Action.QUIT, 'n': Action.NEW_BOARD}
 
 class Puzzle:
 
@@ -18,71 +31,96 @@ class Puzzle:
             print("setting row_count to 2 (received {} - illegal!)".format(row_count))
             row_count = 2
         self.row_count = row_count
-        self.demo_mode = False
-        self.create_initial_random_state()
-        self.key_to_action = {}
-        for k in ['2', '4', '6', '8']:
-            self.key_to_action[k] = self.move
-        self.key_to_action['i'] = self.print_instructions
-        self.key_to_action['n'] = self.create_new_board
+        self.create_new_board()
 
-    def create_initial_random_state(self):
+    def create_new_board(self):
         self.moves_counter = 0
+        self.last_shuffle_move = None
         self.start_time = datetime.datetime.now()
-        data = list(range(int(math.pow(self.row_count,2))))
-        random.shuffle(data)
-        self.matrix = [[data[x+y*self.row_count] for x in range(self.row_count)] for y in range(self.row_count)]
-        self.board_done = False
-        self.find_zero_location()
+        self.board_done = True
+        while self.board_done:
+            self.create_valid_puzzle()
+            for i in range(int(pow(2,self.row_count*2))):
+                self.last_shuffle_move = random.choice(self.get_valid_moves())
+                self.move(self.last_shuffle_move)
+            self.check_if_done()
 
-    def find_zero_location(self):
-        for i in range(self.row_count):
-            for j in range(self.row_count):
-                if self.matrix[i][j] == 0:
-                    self.zero_x = i
-                    self.zero_y = j
-                    return True
-        print("illegal board! couldn't find zero location!")
-        return False
+    def get_opposite_action(self, action):
+        self.opposite_actions = {Action.DOWN: Action.UP, Action.LEFT:Action.RIGHT, Action.UP: Action.DOWN, Action.RIGHT: Action.LEFT}
+        return self.opposite_actions[action]
 
+    def get_valid_moves(self):
+        legal_moves = [Action.UP, Action.DOWN, Action.RIGHT, Action.LEFT]
+        if self.last_shuffle_move is not None:
+            legal_moves.remove(self.get_opposite_action(self.last_shuffle_move))
+        if self.zero_x <= 0:
+            legal_moves.remove(Action.DOWN)
+        elif self.zero_x >= self.row_count-1:
+            legal_moves.remove(Action.UP)
+        if self.zero_y <= 0:
+            legal_moves.remove(Action.RIGHT)
+        elif self.zero_y >= self.row_count-1:
+            legal_moves.remove(Action.LEFT)
 
-    def print_current_state(self):
+        return legal_moves
+
+    def print_puzzle(self):
         for i in range(self.row_count):
             for j in range(self.row_count):
                 print("{}\t".format(self.matrix[i][j] if self.matrix[i][j] > 0 else " "), end='')
             print('')
 
-    def create_new_board(self, args=None):
-        clear()
-        self.create_initial_random_state()
-        self.print_current_state()
 
-    def start_game(self, demo_mode = False):
-        self.demo_mode = demo_mode
+    def get_user_input(self):
+        try:
+            user_input = input()[-1].lower()  # getch.getch() #screen.getch()
+            return key_to_action[user_input]
+        except:
+           pass
+        return Action.ILLEGAL
+
+    def handle_user_action(self, action):
+        if action == Action.ILLEGAL:
+            print("received illegal action!")
+            self.print_instructions()
+        elif action == Action.NEW_BOARD:
+            clear()
+            print("creating new board")
+            self.create_new_board()
+            self.print_puzzle()
+        elif action == Action.QUIT:
+            print("Bye bye!")
+        elif action == Action.INSTRUCTIONS:
+            self.print_instructions()
+        else:
+            self.move(action)
+            self.print_puzzle_after_move()
+
+    def start_game(self):
         self.print_instructions()
-        self.print_current_state()
-        user_input = None
-        while user_input != 'q' and not self.board_done:
-            if not self.demo_mode:
-                user_input = input() #getch.getch() #screen.getch()
-                try:
-                    user_input = user_input[-1].lower()
-                except:
-                    user_input = None
-            else:
-                user_input = random.choice(['4','8', '6', '2'])
-                time.sleep(0.2)
-            if user_input is not None:
-                if user_input in self.key_to_action: # ['4','8', '6', '2']: # [curses.KEY_RIGHT, curses.KEY_LEFT, curses.KEY_UP, curses.KEY_DOWN]:
-                    self.key_to_action[user_input](user_input)
-                elif user_input != 'q':
-                    print("received illegal command: {}".format(user_input))
-                    self.print_instructions()
+        self.print_puzzle()
+        action = Action.ILLEGAL
+        while not self.board_done and not action == Action.QUIT:
+            action = self.get_user_input()
+            self.handle_user_action(action)
+
         if self.board_done:
             print("good job! you finished the game in {} and {} moves".format(datetime.datetime.now()-self.start_time, self.moves_counter))
-        print("Bye bye!")
+            print("do you want to start a new game? (N/Y)")
+            answer = input().lower()
+            if answer == 'y':
+                return True
 
-    def print_instructions(self, args=None):
+        return False
+
+    def create_valid_puzzle(self):
+        data = list(range(int(math.pow(self.row_count, 2))))
+        data.append(data.pop(0))
+        self.matrix = [[data[x + y * self.row_count] for x in range(self.row_count)] for y in range(self.row_count)]
+        self.zero_x = self.row_count-1
+        self.zero_y = self.row_count-1
+
+    def print_instructions(self):
         print("use the following commands: ")
         print("arrow keys: moving (use NumLock keys + Enter for now..)")
         print("n: create new random board")
@@ -90,35 +128,39 @@ class Puzzle:
         print("q: quit")
         print("Enjoy!")
 
+    def get_new_zero_location(self, direction):
+        if direction == Action.UP:
+            return self.zero_x+1, self.zero_y
+        elif direction == Action.DOWN:
+            return self.zero_x - 1, self.zero_y
+        elif direction == Action.RIGHT:
+            return self.zero_x, self.zero_y - 1
+        elif direction == Action.LEFT:
+            return self.zero_x, self.zero_y + 1
+        raise Exception("received illegal direction {}".format(direction))
 
-    def move(self, direction):
-        if (direction == UP and self.zero_x == self.row_count-1)\
-        or (direction == DOWN and self.zero_x == 0)\
-        or (direction == RIGHT and self.zero_y == 0)\
-        or (direction == LEFT and self.zero_y == self.row_count-1):
-            print("illegal move! you can't move there")
-            return False
-        self.moves_counter +=1
-        new_x, new_y = self.zero_x, self.zero_y
-        if direction == UP:
-            new_x+=1
-        elif direction == DOWN:
-            new_x-=1
-        elif direction == RIGHT:
-            new_y-=1
-        elif direction == LEFT:
-            new_y+=1
-        else:
-            print("received illegal direction! ({})".format(direction))
-            return False
-
+    def move_empty_to_new_location(self, new_x, new_y):
         self.matrix[self.zero_x][self.zero_y] = self.matrix[new_x][new_y]
         self.matrix[new_x][new_y] = 0
         self.zero_x, self.zero_y = new_x, new_y
+
+    def print_puzzle_after_move(self):
         clear()
-        self.print_current_state()
-        if self.zero_y == self.row_count-1 and self.zero_x == self.row_count-1:
+        self.print_puzzle()
+        if self.zero_y == self.row_count - 1 and self.zero_x == self.row_count - 1:
             self.check_if_done()
+
+    def move(self, direction):
+        try:
+            new_x, new_y = self.get_new_zero_location(direction)
+            for coordinate in [new_x, new_y]:
+                if coordinate < 0 or coordinate >= self.row_count:
+                    raise Exception("can't move {} in current state".format(direction.name))
+        except Exception as ex:
+            print(ex)
+            return False
+        self.moves_counter += 1
+        self.move_empty_to_new_location(new_x, new_y)
         return True
 
     def check_if_done(self):
