@@ -94,7 +94,9 @@ class Puzzle:
             self.print_instructions()
         else:
             if self.move(action):
-                self.print_puzzle_after_move()
+                self.check_if_done()
+                clear()
+                self.print_puzzle()
 
     def start_game(self):
         self.print_instructions()
@@ -143,11 +145,6 @@ class Puzzle:
         self.matrix[self.zero_x][self.zero_y] = self.matrix[new_x][new_y]
         self.matrix[new_x][new_y] = 0
         self.zero_x, self.zero_y = new_x, new_y
-
-    def print_puzzle_after_move(self):
-        clear()
-        self.print_puzzle()
-        self.check_if_done()
 
     def move(self, direction):
         try:
