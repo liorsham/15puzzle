@@ -1,7 +1,6 @@
 import random
 import math
 import datetime
-import time
 import os
 from enum import Enum
 
@@ -23,6 +22,7 @@ class Action(Enum):
     ILLEGAL = 7
 
 key_to_action = {LEFT_KEY: Action.LEFT, RIGHT_KEY: Action.RIGHT, UP_KEY: Action.UP, DOWN_KEY: Action.DOWN, 'i': Action.INSTRUCTIONS, 'q': Action.QUIT, 'n': Action.NEW_BOARD}
+opposite_actions = {Action.DOWN: Action.UP, Action.LEFT: Action.RIGHT, Action.UP: Action.DOWN, Action.RIGHT: Action.LEFT}
 
 class Puzzle:
 
@@ -31,10 +31,10 @@ class Puzzle:
             print("setting row_count to 2 (received {} - illegal!)".format(row_count))
             row_count = 2
         self.row_count = row_count
+        self.moves_counter = 0
         self.create_new_board()
 
     def create_new_board(self):
-        self.moves_counter = 0
         self.last_shuffle_move = None
         self.start_time = datetime.datetime.now()
         self.board_done = True
@@ -44,10 +44,10 @@ class Puzzle:
                 self.last_shuffle_move = random.choice(self.get_valid_moves())
                 self.move(self.last_shuffle_move)
             self.check_if_done()
+        self.moves_counter = 0
 
     def get_opposite_action(self, action):
-        self.opposite_actions = {Action.DOWN: Action.UP, Action.LEFT:Action.RIGHT, Action.UP: Action.DOWN, Action.RIGHT: Action.LEFT}
-        return self.opposite_actions[action]
+        return opposite_actions[action]
 
     def get_valid_moves(self):
         legal_moves = [Action.UP, Action.DOWN, Action.RIGHT, Action.LEFT]
@@ -73,7 +73,7 @@ class Puzzle:
 
     def get_user_input(self):
         try:
-            user_input = input()[-1].lower()  # getch.getch() #screen.getch()
+            user_input = input()[-1].lower()
             return key_to_action[user_input]
         except:
            pass
@@ -93,25 +93,25 @@ class Puzzle:
         elif action == Action.INSTRUCTIONS:
             self.print_instructions()
         else:
-            self.move(action)
-            self.print_puzzle_after_move()
+            if self.move(action):
+                self.print_puzzle_after_move()
 
     def start_game(self):
         self.print_instructions()
         self.print_puzzle()
         action = Action.ILLEGAL
-        while not self.board_done and not action == Action.QUIT:
+        while not action == Action.QUIT:
             action = self.get_user_input()
             self.handle_user_action(action)
 
-        if self.board_done:
-            print("good job! you finished the game in {} and {} moves".format(datetime.datetime.now()-self.start_time, self.moves_counter))
-            print("do you want to start a new game? (N/Y)")
-            answer = input().lower()
-            if answer == 'y':
-                return True
+            if self.board_done:
+                print("good job! you finished the game in {} and {} moves".format(datetime.datetime.now()-self.start_time, self.moves_counter))
+                print("do you want to start a new game? (N/Y)")
+                answer = input().lower()
+                if answer != 'y':
+                    return
+                self.handle_user_action(Action.NEW_BOARD)
 
-        return False
 
     def create_valid_puzzle(self):
         data = list(range(int(math.pow(self.row_count, 2))))
@@ -147,8 +147,7 @@ class Puzzle:
     def print_puzzle_after_move(self):
         clear()
         self.print_puzzle()
-        if self.zero_y == self.row_count - 1 and self.zero_x == self.row_count - 1:
-            self.check_if_done()
+        self.check_if_done()
 
     def move(self, direction):
         try:
@@ -165,6 +164,8 @@ class Puzzle:
 
     def check_if_done(self):
         self.board_done = False
+        if not (self.zero_y == self.row_count - 1 and self.zero_x == self.row_count - 1):
+            return False
         for i in range(self.row_count):
             for j in range(self.row_count):
                 if i == self.row_count-1 and j == self.row_count-1:
